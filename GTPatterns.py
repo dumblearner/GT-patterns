@@ -24,7 +24,7 @@ class GTPattern:
         """
         Return the string representation of ``self``.
         """
-return str(self.gt)
+        return str(self.gt)
 
     def word(self):
         """
