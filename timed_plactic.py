@@ -1,41 +1,106 @@
+from numpy import array
+
 class TimedWord:
+    """
+    The class of timed words.
+    """
     def __init__(self, w):
-        if hasattr(w, "_w"):
+        """
+        Initialize ``self`` from ``w``.
+
+        INPUT:
+
+        ``w`` - a list of pairs ``(c, t)`` where ``c`` is a positive integer
+                and ``t`` is a positive real number.
+
+        EXAMPLE::
+
+            sage: TimedWord([(2, 1.5), (1, 1.324)])
+            [(2, 1.5), (1, 1.324)]
+            sage: TimedWord([(2, 1.2), (1, 0), (2, 1)])
+            [(2, 2.2)]
+        """
+        if isinstance(w, TimedWord):
             self._w = w._w
         elif len(w) == 0:
             self._w = []
         else:
-            v = [w[0]]
-            for i in range(1, len(w)):
+            v = [tuple(w[0])]
+            for i in range(1, len(w)): # ingore terms with zero time
                 if w[i][1] == 0:
+                    print "Im here"
                     pass
-                if w[i][0] == v[-1][0]:
-                    v[-1][1] += w[i][1]
+                elif w[i][0] == v[-1][0]: # merge common consecutive terms
+                    v[-1] = (v[-1][0], v[-1][1]+w[i][1])
                 else:
-                    v.append(w[i])
+                    v.append((w[i][0], w[i][1]))
             self._w = v
 
     def __repr__(self):
+        """
+        Return the sring representations of ``self``.
+        """
         return str(self._w)
 
     def to_list(self):
+        """
+        Return the list underlying ``self``.
+        """
         return self._w
 
     def rows(self):
+        """
+        Return the row decomposition of ``self``.
+        """
+        if self._w == []:
+            return []
+        output = [[self._w[0]]]
+        for entry in self._w[1:]:
+            if entry[0] >= output[-1][-1][0]:
+                output[-1].append(entry)
+            else:
+                output.append([entry])
+        return [TimedRow(r) for r in output]
         b = break_into_rows(self._w)
         return [r for r in b]
-        
+
+    def is_row(self):
+        """
+        Return if ``self`` is a row.
+        """
+        return all([self._w[i][0]<= self._w[i+1][0] for i in range(len(self._w)-1)])
+    
     def length(self):
-        return length(self._w)
+        """
+        Return the length to ``self``.
+
+        The length of a timed word is the sum of timings of its terms.
+        """
+        return sum([term[1] for term in self._w])
 
     def value(self, t):
-        return value(self._w, t)
+        """
+        Return the value of ``self`` at time ``t``.
+
+        NOTE:
+
+        The function associated to a timed word is right continuous. 
+        """
+        t0 = 0
+        for i, l in enumerate(self._w):
+            t1 = t0 + l[1]
+            if t1 > t:
+                return l[0]
+            else:
+                t0 = t1
+        return 0
 
     def segments(self):
-        return segements(self._w)
-
-    def dominates(self, other):
-        return dominates(self._w, other._w)
+        """
+        Return the points of discontinuity of ``self``.
+        """
+        durations = [l[1] for l in self._w]
+        return [sum(durations[:i]) for i in range(len(self._w))]
 
     def is_tableau(self):
         b = self.rows()
@@ -49,6 +114,18 @@ class TimedWord:
 
     def concatenate(self, other):
         return TimedWord(self._w + other._w)
+
+    def schensted(self):
+        """
+        Return the insertion tableau of ``self``.
+
+        The Schensted tableau of a timed word is the unique tableaux that is
+        plactic equivalent to it.
+        """
+        output = TimedTableau([])
+        for row in self.rows():
+            output = output.insert_row(row)
+        return output
         
 class TimedTableau(TimedWord):
     def __init__(self, w):
@@ -76,7 +153,6 @@ class TimedTableau(TimedWord):
 
     def insert_row(self, row):
         out = self.pre_insert_row(row)
-        print out
         return TimedTableau(out[0].concatenate(out[1]))
 
     def shape(self):
@@ -88,10 +164,27 @@ class TimedTableau(TimedWord):
         return [(line+[0]*(max(0, i + 1 - len(line))))[:i+1] for i, line in enumerate(arr)]
         
 class TimedRow(TimedWord):
+    """
+    The class of timed rows.
+    """
     def __init__(self, w):
-        TimedWord.__init__(self, w)
-        if self.number_of_rows() > 1:
-            raise ValueError("Input is not a row")
+        if isinstance(w, TimedWord):
+            w = w._w
+        assert all([w[i][0] <= w[i+1][0] for i in range(len(w)-1)]), "%s is not a row"%(w)
+        return TimedWord.__init__(self, w)
+
+    def dominates(self, other):
+        """
+        Return whether ``self`` dominates ``other``.
+        """
+        if self.length() > other.length():
+            return False
+        else:
+            s1 = self.segments()
+            s2 = other.segments()
+            comb = sorted(s1+s2)
+            return all([self.value(t) > other.value(t) for t in comb if t < self.length()])
+        return dominates(self._w, other._w)
 
     def insert_term(self, term):
         c = term[0]
@@ -137,60 +230,6 @@ class TimedRow(TimedWord):
             second_row = step[1]
             first_row = TimedRow(first_row.concatenate(step[0]))
         return TimedRow(first_row), TimedRow(second_row)
-        
-def break_into_rows(w):
-    if w == []:
-        return []
-    output = [[w[0]]]
-    for entry in w[1:]:
-        if entry[0] >= output[-1][-1][0]:
-            output[-1].append(entry)
-        else:
-            output.append([entry])
-    return output
-
-def length(w):
-    return sum([l[1] for l in w])
-
-def value(w, t):
-    t0 = 0
-    for i, l in enumerate(w):
-        t1 = t0 + l[1]
-        if t1 > t:
-            return l[0]
-        else:
-            t0 = t1
-    return 0
-    
-def segments(w):
-    durations = [l[1] for l in w]
-    return [sum(durations[:i]) for i in range(len(w))]
-        
-def dominates(row1, row2):
-    """
-    Return True if row1 dominates row2.
-    """
-    if length(row1) > length(row2):
-        return False
-    else:
-        s1 = segments(row1)
-        s2 = segments(row2)
-        comb = sorted(s1+s2)
-        return all([value(row1, t) > value(row2, t) for t in comb if t < length(row1)])
-
-def is_tableau(w):
-    b = break_into_rows(w)
-    if len(b) == 1:
-        return True
-    return all([dominates(b[i], b[i+1]) for i in range(len(b)-1)])
-        
-
-def real_schensted(w):
-    w = TimedWord(w)
-    output = TimedTableau([])
-    for row in w.rows():
-        output = output.insert_row(TimedRow(row))
-    return output
 
 def random_word(max_let, terms, max_time=1):
     return TimedWord([[randint(1, max_let), max_time*random()] for i in range(terms)])
@@ -202,7 +241,7 @@ def random_term(max_let):
     return [randint(1, max_let), random()]
 
 def plactic_rsk(A):
-    return real_schensted(TimedWord([[j+1, A[i,j]] for i in range(A.nrows()) for j in range(A.ncols())])), real_schensted(TimedWord([[i+1, A[i,j]] for j in range(A.ncols()) for i in range(A.nrows())]))
+    return (TimedWord([[j+1, A[i,j]] for i in range(A.shape[0]) for j in range(A.shape[1])]).schensted(), TimedWord([[i+1, A[i,j]] for j in range(A.shape[1]) for i in range(A.shape[0])]).schensted())
     
 w1 = TimedWord([[1, 1], [2, 1.5], [4, 2], [3, 1.2], [1, 3]])
 w2 = TimedTableau([[2, 1], [3, 1.5], [1, 1.5], [2, 1.5], [3, 0.2]])
