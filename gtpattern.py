@@ -36,6 +36,18 @@ class gtpattern:
             for i in range(l-j-1,-1,-1):
                 w = w+str(l-i)*int(self.wmatrix[i][j])
         return(w)
+        
+    def timedword(self):
+        """
+        Return the reading timed word of ``self``.
+        """
+        from timed_plactic3 import TimedWord as tw
+        w = []
+        l = len(self.wmatrix)
+        for j in range(l-1,-1,-1):
+            for i in range(l-j-1,-1,-1):
+                w.append((l-i,int(self.wmatrix[i][j])))
+        return(tw(w))
 
     def tab(self):
         """
